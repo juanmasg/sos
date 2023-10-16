@@ -43,7 +43,9 @@ class Foreman(Plugin):
         self.dbhost = "localhost"
         self.dbpasswd = ""
         try:
-            for line in open("/etc/foreman/database.yml").read().splitlines():
+            with open('/etc/foreman/database.yml', 'r') as dfile:
+                foreman_lines = dfile.read().splitlines()
+            for line in foreman_lines:
                 # skip empty lines and lines with comments
                 if not line or line[0] == '#':
                     continue
@@ -131,6 +133,13 @@ class Foreman(Plugin):
             'ping -c1 -W1 %s' % _host_f,
             'ping -c1 -W1 localhost'
         ])
+        self.add_cmd_output(
+            'qpid-stat -b amqps://localhost:5671 -q \
+                    --ssl-certificate=/etc/pki/katello/qpid_router_client.crt \
+                    --ssl-key=/etc/pki/katello/qpid_router_client.key \
+                    --sasl-mechanism=ANONYMOUS',
+            suggest_filename='qpid-stat_-q'
+        )
         self.add_cmd_output("hammer ping", tags="hammer_ping")
 
         # Dynflow Sidekiq
@@ -181,7 +190,7 @@ class Foreman(Plugin):
         )
 
         authcmd = (
-            'select type,name,host,port,account,base_dn,attr_login,'
+            'select id,type,name,host,port,account,base_dn,attr_login,'
             'onthefly_register,tls from auth_sources'
         )
 
@@ -223,6 +232,7 @@ class Foreman(Plugin):
 
         foremandb = {
             'foreman_settings_table': scmd,
+            'foreman_schema_migrations': 'select * from schema_migrations',
             'foreman_auth_table': authcmd,
             'dynflow_schema_info': 'select * from dynflow_schema_info',
             'audits_table_count': 'select count(*) from audits',
@@ -328,8 +338,7 @@ class RedHatForeman(Foreman, SCLPlugin, RedHatPlugin):
             self.pumactl = "scl enable tfm '%s'" % self.pumactl
 
         super(RedHatForeman, self).setup()
-        self.add_cmd_output_scl('tfm', 'gem list',
-                                suggest_filename='scl enable tfm gem list')
+        self.add_cmd_output('gem list')
 
 
 class DebianForeman(Foreman, DebianPlugin, UbuntuPlugin):

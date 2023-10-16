@@ -44,7 +44,8 @@ class Juju(Plugin, UbuntuPlugin):
             # want all logs you want this too.
             self.add_copy_spec([
                 "/var/log/juju",
-                "/var/lib/juju"
+                "/var/lib/juju",
+                "/var/lib/juju/**/.*",
             ])
             self.add_forbidden_path("/var/lib/juju/kvm")
         else:
@@ -62,7 +63,7 @@ class Juju(Plugin, UbuntuPlugin):
         ]
 
         # Redact simple yaml style "key: value".
-        keys_regex = r"((?m)^\s*(%s)\s*:\s*)(.*)" % "|".join(protect_keys)
+        keys_regex = r"(^\s*(%s)\s*:\s*)(.*)" % "|".join(protect_keys)
         sub_regex = r"\1*********"
         self.do_path_regex_sub(agents_path, keys_regex, sub_regex)
         # Redact certificates

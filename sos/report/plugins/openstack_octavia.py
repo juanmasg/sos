@@ -117,7 +117,7 @@ class OpenStackOctavia(Plugin):
             "connection", "transport_url", "server_certs_key_passphrase",
             "memcache_secret_key"
         ]
-        regexp = r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys)
+        regexp = r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys)
 
         self.do_path_regex_sub("/etc/octavia/*", regexp, r"\1*********")
         self.do_path_regex_sub(
@@ -128,7 +128,11 @@ class OpenStackOctavia(Plugin):
 
 class DebianOctavia(OpenStackOctavia, DebianPlugin, UbuntuPlugin):
 
-    packages = ('octavia-common', 'octavia-api', )
+    packages = (
+        'octavia-common',
+        'octavia-api',
+        'python3-octavia',
+    )
 
     def setup(self):
         super(DebianOctavia, self).setup()

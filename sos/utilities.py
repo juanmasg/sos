@@ -319,6 +319,8 @@ def _os_wrapper(path, sysroot, method, module=os.path):
 
 
 def path_exists(path, sysroot):
+    if '*' in path:
+        return _os_wrapper(path, sysroot, 'glob', module=glob)
     return _os_wrapper(path, sysroot, 'exists')
 
 
@@ -531,8 +533,7 @@ class ImporterHelper(object):
             pnames = self._get_plugins_from_list(py_files)
             if pnames:
                 return pnames
-            else:
-                return []
+        return []
 
     def get_modules(self):
         """Returns the list of importable modules in the configured python

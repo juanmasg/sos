@@ -25,6 +25,12 @@ from sos.utilities import file_is_binary
 def extract_archive(archive_path, tmpdir):
     archive = tarfile.open(archive_path)
     path = os.path.join(tmpdir, 'cleaner')
+    # set extract filter since python 3.12 (see PEP-706 for more)
+    # Because python 3.10 and 3.11 raises false alarms as exceptions
+    # (see #3330 for examples), we can't use data filter but must
+    # fully trust the archive (legacy behaviour)
+    archive.extraction_filter = getattr(tarfile, 'fully_trusted_filter',
+                                        (lambda member, path: member))
     archive.extractall(path)
     archive.close()
     return os.path.join(path, archive.name.split('/')[-1].split('.tar')[0])
@@ -68,6 +74,14 @@ class SoSObfuscationArchive():
     def check_is_type(cls, arc_path):
         """Check if the archive is a well-known type we directly support"""
         return False
+
+    @property
+    def is_sos(self):
+        return 'sos' in self.__class__.__name__.lower()
+
+    @property
+    def is_insights(self):
+        return 'insights' in self.type_name
 
     def _load_self(self):
         if self.is_tarfile:
@@ -166,8 +180,12 @@ class SoSObfuscationArchive():
                 )
                 return ''
         else:
-            with open(self.format_file_name(fname), 'r') as to_read:
-                return to_read.read()
+            try:
+                with open(self.format_file_name(fname), 'r') as to_read:
+                    return to_read.read()
+            except Exception as err:
+                self.log_debug(f"Failed to get contents of {fname}: {err}")
+                return ''
 
     def extract(self, quiet=False):
         if self.is_tarfile:

@@ -50,7 +50,7 @@ class OpenStackHorizon(Plugin):
             "SECRET_KEY", "EMAIL_HOST_PASSWORD"
         ]
 
-        regexp = r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys)
+        regexp = r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys)
         for regpath in [r"/etc/openstack-dashboard/.*\.json",
                         "/etc/openstack-dashboard/local_settings$"]:
             self.do_path_regex_sub(regpath, regexp, r"\1*********")
@@ -75,8 +75,9 @@ class UbuntuHorizon(OpenStackHorizon, UbuntuPlugin):
 
     packages = (
         'python-django-horizon',
+        'python3-django-horizon',
         'openstack-dashboard',
-        'openstack-dashboard-ubuntu-theme'
+        'openstack-dashboard-ubuntu-theme',
     )
 
     def setup(self):

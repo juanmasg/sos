@@ -129,6 +129,8 @@ class OpenVSwitch(Plugin):
             # Capture OVS datapath list
             "ovs-vsctl -t 5 list datapath",
             # Capture DPDK queue to pmd mapping
+            "ovs-appctl dpif-netdev/pmd-rxq-show -secs 5",
+            "ovs-appctl dpif-netdev/pmd-rxq-show -secs 30",
             "ovs-appctl dpif-netdev/pmd-rxq-show",
             # Capture DPDK pmd stats
             "ovs-appctl dpif-netdev/pmd-stats-show",
@@ -149,7 +151,13 @@ class OpenVSwitch(Plugin):
             # Capture dpif implementations
             "ovs-appctl dpif-netdev/dpif-impl-get",
             # Capture miniflow extract implementations
-            "ovs-appctl dpif-netdev/miniflow-parser-get"
+            "ovs-appctl dpif-netdev/miniflow-parser-get",
+            # Capture DPDK pmd sleep config
+            "ovs-appctl dpif-netdev/pmd-sleep-show",
+            # Capture additional DPDK info
+            "ovs-appctl dpdk/lcore-list",
+            "ovs-appctl dpdk/log-list",
+            "ovs-appctl dpdk/get-malloc-stats"
         ])
         # Capture DPDK and other parameters
         self.add_cmd_output("ovs-vsctl -t 5 get Open_vSwitch . other_config",

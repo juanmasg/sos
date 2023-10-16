@@ -89,11 +89,11 @@ class OpenStackNeutron(Plugin):
         connection_keys = ["connection"]
 
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
+            r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
             r"\1*********"
         )
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
+            r"(^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
             "|".join(connection_keys),
             r"\1*********\6"
         )
@@ -111,7 +111,7 @@ class DebianNeutron(OpenStackNeutron, DebianPlugin, UbuntuPlugin):
         'neutron-plugin-ryu-agent',
         'neutron-server',
         'python-neutron',
-        'python-neutronclient'
+        'python3-neutron',
     )
 
     def check_enabled(self):

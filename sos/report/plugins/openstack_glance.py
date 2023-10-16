@@ -96,11 +96,11 @@ class OpenStackGlance(Plugin):
         connection_keys = ["connection"]
 
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
+            r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
             r"\1*********"
         )
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
+            r"(^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
             "|".join(connection_keys),
             r"\1*********\6"
         )
@@ -114,7 +114,8 @@ class DebianGlance(OpenStackGlance, DebianPlugin, UbuntuPlugin):
         'glance-client',
         'glance-common',
         'glance-registry',
-        'python-glance'
+        'python-glance',
+        'python3-glance',
     )
     service_name = 'glance-api.service'
 

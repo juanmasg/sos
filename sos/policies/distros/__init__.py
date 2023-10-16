@@ -20,6 +20,7 @@ from sos.policies.init_systems.systemd import SystemdInit
 from sos.policies.runtimes.crio import CrioContainerRuntime
 from sos.policies.runtimes.podman import PodmanContainerRuntime
 from sos.policies.runtimes.docker import DockerContainerRuntime
+from sos.policies.runtimes.lxd import LxdContainerRuntime
 
 from sos.utilities import (shell_out, is_executable, bold,
                            sos_get_command_output)
@@ -95,7 +96,8 @@ class LinuxPolicy(Policy):
             _crun = [
                 PodmanContainerRuntime(policy=self),
                 DockerContainerRuntime(policy=self),
-                CrioContainerRuntime(policy=self)
+                CrioContainerRuntime(policy=self),
+                LxdContainerRuntime(policy=self),
             ]
             for runtime in _crun:
                 if runtime.check_is_active():
@@ -375,7 +377,7 @@ class LinuxPolicy(Policy):
         Entry point for sos attempts to upload the generated archive to a
         policy or user specified location.
 
-        Curerntly there is support for HTTPS, SFTP, and FTP. HTTPS uploads are
+        Currently there is support for HTTPS, SFTP, and FTP. HTTPS uploads are
         preferred for policy-defined defaults.
 
         Policies that need to override uploading methods should override the
@@ -456,7 +458,7 @@ class LinuxPolicy(Policy):
         :param password: Password for `user` to use for upload
         :type password: ``str``
 
-        :returns: The user/password auth suitable for use in reqests calls
+        :returns: The user/password auth suitable for use in requests calls
         :rtype: ``requests.auth.HTTPBasicAuth()``
         """
         if not user:

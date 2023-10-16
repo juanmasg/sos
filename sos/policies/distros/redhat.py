@@ -338,6 +338,10 @@ support representative.
                 _user = self.get_upload_user()
                 _token = json.loads(ret.text)['token']
             else:
+                self.ui_log.debug(
+                    f"DEBUG: auth attempt failed (status: {ret.status_code}): "
+                    f"{ret.json()}"
+                )
                 self.ui_log.error(
                     "Unable to retrieve Red Hat auth token using provided "
                     "credentials. Will try anonymous."
@@ -354,6 +358,12 @@ support representative.
                     _(f"User {_user} used for anonymous upload. Please inform "
                       f"your support engineer so they may retrieve the data.")
                 )
+            else:
+                self.ui_log.debug(
+                    f"DEBUG: anonymous request failed (status: "
+                    f"{anon.status_code}): {anon.json()}"
+                )
+
         if _user and _token:
             return super(RHELPolicy, self).upload_sftp(user=_user,
                                                        password=_token)
@@ -456,8 +466,9 @@ support representative.
         if not os.path.exists(host_release):
             return False
         try:
-            for line in open(host_release, "r").read().splitlines():
-                atomic |= ATOMIC_RELEASE_STR in line
+            with open(host_release, 'r') as afile:
+                for line in afile.read().splitlines():
+                    atomic |= ATOMIC_RELEASE_STR in line
         except IOError:
             pass
         return atomic
@@ -541,8 +552,9 @@ support representative.
             return coreos
         host_release = os.environ[ENV_HOST_SYSROOT] + OS_RELEASE
         try:
-            for line in open(host_release, 'r').read().splitlines():
-                coreos |= 'Red Hat Enterprise Linux CoreOS' in line
+            with open(host_release, 'r') as hfile:
+                for line in hfile.read().splitlines():
+                    coreos |= 'Red Hat Enterprise Linux CoreOS' in line
         except IOError:
             pass
         return coreos

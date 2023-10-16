@@ -26,8 +26,8 @@ class Microshift(Plugin, RedHatPlugin):
     short_desc = 'Microshift'
     plugin_name = 'microshift'
     plugin_timeout = 900
-    packages = ('microshift', 'microshift-selinux', 'microshift-networking')
-    services = (plugin_name,)
+    packages = ('microshift', 'microshift-selinux', 'microshift-networking',)
+    services = (plugin_name, 'microshift-etcd.scope',)
     profiles = (plugin_name,)
     localhost_kubeconfig = '/var/lib/microshift/resources/kubeadmin/kubeconfig'
 
@@ -146,7 +146,14 @@ class Microshift(Plugin, RedHatPlugin):
         Output format for this function is based on `oc adm inspect` command,
         which is used to retrieve all API resources from the cluster.
         """
-        self.add_forbidden_path('/var/lib/microshift')
+
+        self.add_copy_spec('/etc/microshift')
+
+        if self.path_exists('/var/lib/microshift-backups'):
+            self.add_copy_spec(['/var/lib/microshift-backups/*/version',
+                                '/var/lib/microshift-backups/*.json'])
+        self.add_copy_spec(['/var/log/kube-apiserver/*.log'])
+
         self.add_cmd_output([
             'microshift version',
             'microshift show-config -m effective'

@@ -92,6 +92,7 @@ class OpenStackNova(Plugin):
         if self.get_option("all_logs"):
             self.add_copy_spec([
                 "/var/log/nova/",
+                "/var/log/{}*/nova*".format(self.apachepkg),
             ])
         else:
             novadir = '/var/log/nova/'
@@ -106,6 +107,10 @@ class OpenStackNova(Plugin):
             ]
             for novalog in novalogs:
                 self.add_copy_spec(self.path_join(novadir, novalog))
+            self.add_copy_spec([
+                "/var/log/{}*/nova*.log".format(self.apachepkg),
+                "/var/log/{}*/placement*.log".format(self.apachepkg),
+            ])
 
         pp = ['', '_libvirt', '_metadata', '_placement']
         sp = [
@@ -150,11 +155,11 @@ class OpenStackNova(Plugin):
         connection_keys = ["connection", "sql_connection"]
 
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
+            r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
             r"\1*********"
         )
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
+            r"(^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
             "|".join(connection_keys),
             r"\1*********\6"
         )
@@ -162,6 +167,7 @@ class OpenStackNova(Plugin):
 
 class DebianNova(OpenStackNova, DebianPlugin, UbuntuPlugin):
 
+    apachepkg = "apache2"
     nova = False
     packages = (
         'nova-api-ec2',
@@ -183,8 +189,8 @@ class DebianNova(OpenStackNova, DebianPlugin, UbuntuPlugin):
         'nova-volume',
         'novnc',
         'python-nova',
-        'python-novaclient',
-        'python-novnc'
+        'python-novnc',
+        'python3-nova',
     )
     service_name = "nova-api.service"
 
@@ -198,6 +204,7 @@ class DebianNova(OpenStackNova, DebianPlugin, UbuntuPlugin):
 
 class RedHatNova(OpenStackNova, RedHatPlugin):
 
+    apachepkg = "httpd"
     nova = False
     packages = ('openstack-selinux',)
 
@@ -212,12 +219,10 @@ class RedHatNova(OpenStackNova, RedHatPlugin):
         ])
         if self.get_option("all_logs"):
             self.add_copy_spec([
-                "/var/log/httpd/nova*",
                 "/var/log/httpd/placement*",
             ])
         else:
             self.add_copy_spec([
-                "/var/log/httpd/nova*.log",
                 "/var/log/httpd/placement*.log",
             ])
 

@@ -28,8 +28,14 @@ class Maas(Plugin, UbuntuPlugin):
         'maas-rackd',
         'maas-regiond',
         'maas-syslog',
-        # For the snap:
+        # MAAS 3.5 deb:
+        'maas-temporal',
+        'maas-apiserver',
+        'maas-agent',
+        # For the pre-3.5 snap:
         'snap.maas.supervisor',
+        # MAAS 3.5 snap uses `snap.maas.pebble` service, but it's not
+        # included here to prevent automatic journald log collection.
     )
 
     option_list = [
@@ -57,14 +63,10 @@ class Maas(Plugin, UbuntuPlugin):
         return ret['status'] == 0
 
     def _is_snap_installed(self):
-        return self.exec_cmd('snap list maas')["status"] == 0
-
-    def check_enabled(self):
-        if super().check_enabled():
-            # deb-based MAAS and existing triggers
-            return True
-        # Do we have the snap installed?
-        return self._is_snap_installed()
+        maas_pkg = self.policy.package_manager.pkg_by_name('maas')
+        if maas_pkg:
+            return maas_pkg['pkg_manager'] == 'snap'
+        return False
 
     def setup(self):
         self._is_snap = self._is_snap_installed()
@@ -73,6 +75,15 @@ class Maas(Plugin, UbuntuPlugin):
                 'snap info maas',
                 'maas status'
             ])
+
+            if self.is_service("snap.maas.pebble"):
+                # Because `snap.maas.pebble` is not in the services
+                # tuple to prevent timeouts caused by log collection,
+                # service status and logs are collected here.
+                self.add_service_status("snap.maas.pebble")
+                since = self.get_option("since") or "-1days"
+                self.add_journal(units="snap.maas.pebble", since=since)
+
             # Don't send secrets
             self.add_forbidden_path("/var/snap/maas/current/bind/session.key")
             self.add_copy_spec([
@@ -91,7 +102,9 @@ class Maas(Plugin, UbuntuPlugin):
                 "/etc/squid-deb-proxy",
                 "/etc/maas",
                 "/var/lib/maas/dhcp*",
-                "/var/log/apache2*",
+                "/var/lib/maas/http/*.conf",
+                "/var/lib/maas/*.conf",
+                "/var/lib/maas/rsyslog",
                 "/var/log/maas*",
                 "/var/log/upstart/maas-*",
             ])

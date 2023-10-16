@@ -39,7 +39,9 @@ class PowerPC(Plugin, IndependentPlugin):
                 "/proc/swaps",
                 "/proc/version",
                 "/dev/nvram",
-                "/var/lib/lsvpd/"
+                "/var/lib/lsvpd/",
+                "/var/log/lp_diag.log",
+                "/etc/ct_node_id"
             ])
             self.add_cmd_output([
                 "ppc64_cpu --info",
@@ -55,7 +57,11 @@ class PowerPC(Plugin, IndependentPlugin):
                 "lscfg -v",
                 "opal-elog-parse -s",
                 "opal-elog-parse -a",
-                "opal-elog-parse -l"
+                "opal-elog-parse -l",
+                "lssrc -a",
+                "lsrsrc IBM.MCP",
+                "rmcdomainstatus -s ctrmc",
+                "rmcdomainstatus -s ctrmc -a ip"
             ])
 
         if ispSeries:
@@ -67,6 +73,7 @@ class PowerPC(Plugin, IndependentPlugin):
                 "/var/log/drmgr",
                 "/var/log/drmgr.0",
                 "/var/log/hcnmgr",
+                "/var/log/rtas_errd.log",
                 "/var/ct/IBM.DRM.stderr",
                 "/var/ct/IW/log/mc/IBM.DRM/trace*"
             ])
@@ -87,7 +94,18 @@ class PowerPC(Plugin, IndependentPlugin):
                 "lsslot",
                 "amsstat"
             ])
-            self.add_service_status("hcn-init")
+
+            # Due to the lack of options in invscout for generating log files
+            # in locations other than /var/adm/invscout/, it is necessary to
+            # run invscout commands prior to collecting the log files.
+            self.collect_cmd_output("invscout")
+            self.collect_cmd_output("invscout -v")
+            self.add_copy_spec(["/var/adm/invscout/*"])
+
+            self.add_service_status([
+                "hcn-init",
+                "ctrmc"
+            ])
 
         if isPowerNV:
             self.add_copy_spec([
@@ -98,6 +116,9 @@ class PowerPC(Plugin, IndependentPlugin):
                 "/var/log/opal-elog/",
                 "/var/log/opal-prd",
                 "/var/log/opal-prd.log*"
+            ])
+            self.add_cmd_output([
+                "opal-prd --expert-mode run nvdimm_info"
             ])
             if self.path_isdir("/var/log/dump"):
                 self.add_cmd_output("ls -l /var/log/dump")

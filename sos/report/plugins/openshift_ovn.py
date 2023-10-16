@@ -16,18 +16,35 @@ class OpenshiftOVN(Plugin, RedHatPlugin):
     """
     short_desc = 'Openshift OVN'
     plugin_name = "openshift_ovn"
-    containers = ('ovnkube-master', 'ovnkube-node', 'ovn-ipsec')
+    containers = ('ovnkube-master', 'ovnkube-node', 'ovn-ipsec',
+                  'ovnkube-controller')
     profiles = ('openshift',)
 
     def setup(self):
+        all_logs = self.get_option("all_logs")
+
         self.add_copy_spec([
             "/var/lib/ovn/etc/ovnnb_db.db",
             "/var/lib/ovn/etc/ovnsb_db.db",
-            "/var/lib/openvswitch/etc/keys",
-            "/var/log/openvswitch/libreswan.log",
-            "/var/log/openvswitch/ovs-monitor-ipsec.log"
-        ])
+            "/var/lib/openvswitch/etc/keys"
+        ], sizelimit=300)
 
+        # Collect ovn interconnect specific db files if exists.
+        self.add_copy_spec([
+            "/var/lib/ovn-ic/etc/ovnnb_db.db",
+            "/var/lib/ovn-ic/etc/ovnsb_db.db"
+        ], sizelimit=300)
+
+        # Collect libovsdb logs in case of ovn interconnect setup.
+        if not all_logs:
+            self.add_copy_spec([
+                "/var/lib/ovn-ic/etc/libovsdb.log",
+                "/var/lib/ovn-ic/etc/libovsdb*log.gz"
+            ], sizelimit=100)
+        else:
+            self.add_copy_spec("/var/lib/ovn-ic/etc/libovsdb*log*")
+
+        # The ovn cluster/status is not valid anymore for interconnect setup.
         self.add_cmd_output([
             'ovn-appctl -t /var/run/ovn/ovnnb_db.ctl ' +
             'cluster/status OVN_Northbound',
@@ -38,6 +55,14 @@ class OpenshiftOVN(Plugin, RedHatPlugin):
             'ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ' +
             'ct-zone-list'],
             container='ovnkube-node')
+        self.add_cmd_output([
+            'ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ' +
+            'ct-zone-list'],
+            container='ovnkube-controller')
+        # Collect ovs ct-zone-list directly on host for interconnect setup.
+        self.add_cmd_output([
+            'ovs-appctl -t /var/run/ovn-ic/ovn-controller.*.ctl ' +
+            'ct-zone-list'])
         self.add_cmd_output([
             'ovs-appctl -t ovs-monitor-ipsec tunnels/show',
             'ipsec status',

@@ -61,6 +61,7 @@ def _node_type(st):
     for t in _types:
         if t[0](st.st_mode):
             return t[1]
+    return ''
 
 
 _certmatch = re.compile("-*BEGIN.*?-*END", re.DOTALL)
@@ -187,6 +188,10 @@ class SoSPredicate(object):
             return all(items)
         elif required == 'none':
             return not any(items)
+        raise ValueError(
+            f"predicate requires must be 'any', 'all', or 'none' "
+            f"not {required}"
+        )
 
     def _failed_or_forbidden(self, test, item):
         """Helper to direct failed predicates to provide the proper messaging
@@ -453,7 +458,7 @@ class PluginOpt():
         if type('') in self.val_type:
             self.value = str(val)
             return
-        if not any([type(val) == _t for _t in self.val_type]):
+        if not any([type(val) is _t for _t in self.val_type]):
             valid = []
             for t in self.val_type:
                 if t is None:
@@ -1274,7 +1279,13 @@ class Plugin():
         """
         try:
             path = self._get_dest_for_srcpath(srcpath)
-            pattern = regexp.pattern if hasattr(regexp, "pattern") else regexp
+            common_flags = re.IGNORECASE | re.MULTILINE
+            if hasattr(regexp, "pattern"):
+                pattern = regexp.pattern
+                flags = regexp.flags | common_flags
+            else:
+                pattern = regexp
+                flags = common_flags
             self._log_debug("substituting scrpath '%s'" % srcpath)
             self._log_debug("substituting '%s' for '%s' in '%s'"
                             % (subst, pattern, path))
@@ -1284,10 +1295,10 @@ class Plugin():
             content = readable.read()
             if not isinstance(content, str):
                 content = content.decode('utf8', 'ignore')
-            result, replacements = re.subn(regexp, subst, content,
-                                           flags=re.IGNORECASE)
+            result, replacements = re.subn(pattern, subst, content,
+                                           flags=flags)
             if replacements:
-                self.archive.add_string(result, srcpath)
+                self.archive.add_string(result, self.strip_sysroot(srcpath))
             else:
                 replacements = 0
         except (OSError, IOError) as e:
@@ -1380,7 +1391,11 @@ class Plugin():
 
         # skip recursive copying of symlink pointing to itself.
         if (absdest != srcpath):
-            self._do_copy_path(absdest)
+            # this allows for ensuring we collect the host's file when copying
+            # a symlink from within a container that is within the set sysroot
+            force = (absdest.startswith(self.sysroot) and
+                     self.policy._in_container)
+            self._do_copy_path(absdest, force=force)
         else:
             self._log_debug("link '%s' points to itself, skipping target..."
                             % linkdest)
@@ -1442,17 +1457,17 @@ class Plugin():
         self.archive.add_node(path, mode, os.makedev(dev_maj, dev_min))
 
     # Methods for copying files and shelling out
-    def _do_copy_path(self, srcpath, dest=None):
+    def _do_copy_path(self, srcpath, dest=None, force=False):
         """Copy file or directory to the destination tree. If a directory, then
         everything below it is recursively copied. A list of copied files are
         saved for use later in preparing a report.
         """
         if self._timeout_hit:
-            return
+            return None
 
         if self._is_forbidden_path(srcpath):
             self._log_debug("skipping forbidden path '%s'" % srcpath)
-            return ''
+            return None
 
         if not dest:
             dest = srcpath
@@ -1464,19 +1479,19 @@ class Plugin():
             st = os.lstat(srcpath)
         except (OSError, IOError):
             self._log_info("failed to stat '%s'" % srcpath)
-            return
+            return None
 
         if stat.S_ISLNK(st.st_mode):
             self._copy_symlink(srcpath)
-            return
+            return None
         else:
             if stat.S_ISDIR(st.st_mode) and os.access(srcpath, os.R_OK):
                 # copy empty directory
                 if not self.listdir(srcpath):
                     self.archive.add_dir(dest)
-                    return
+                    return None
                 self._copy_dir(srcpath)
-                return
+                return None
 
         # handle special nodes (block, char, fifo, socket)
         if not (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode)):
@@ -1484,7 +1499,7 @@ class Plugin():
             self._log_debug("creating %s node at archive:'%s'"
                             % (ntype, dest))
             self._copy_node(dest, st)
-            return
+            return None
 
         # if we get here, it's definitely a regular file (not a symlink or dir)
         self._log_debug("copying path '%s' to archive:'%s'" % (srcpath, dest))
@@ -1494,13 +1509,15 @@ class Plugin():
             # FIXME: reflect permissions in archive
             self.archive.add_string("", dest)
         else:
-            self.archive.add_file(srcpath, dest)
+            self.archive.add_file(srcpath, dest, force=force)
 
         self.copied_files.append({
             'srcpath': srcpath,
             'dstpath': dest,
             'symlink': "no"
         })
+
+        return None
 
     def add_forbidden_path(self, forbidden):
         """Specify a path, or list of paths, to not copy, even if it's part of
@@ -1683,7 +1700,7 @@ class Plugin():
         if not self.test_predicate(pred=pred):
             self._log_info("skipped copy spec '%s' due to predicate (%s)" %
                            (copyspecs, self.get_predicate(pred=pred)))
-            return
+            return None
 
         if sizelimit is None:
             sizelimit = self.get_option("log_size")
@@ -1711,11 +1728,12 @@ class Plugin():
             mangled to _conf or similar.
             """
             if fname.startswith(('/proc', '/sys')):
-                return
+                return None
             _fname = fname.split('/')[-1]
             _fname = _fname.replace('-', '_')
             if _fname.endswith(('.conf', '.log', '.txt')):
                 return _fname.replace('.', '_')
+            return None
 
         for copyspec in copyspecs:
             if not (copyspec and len(copyspec)):
@@ -1878,6 +1896,7 @@ class Plugin():
                         'files_copied': _manifest_files,
                         'tags': _spec_tags
                     })
+        return None
 
     def add_device_cmd(self, cmds, devices, timeout=None, sizelimit=None,
                        chroot=True, runat=None, env=None, binary=False,
@@ -2165,7 +2184,7 @@ class Plugin():
         if name:
             cmd_output_path = os.path.join(cmd_output_path, name)
         if make:
-            os.makedirs(cmd_output_path)
+            os.makedirs(cmd_output_path, exist_ok=True)
 
         return cmd_output_path
 
@@ -2310,7 +2329,7 @@ class Plugin():
 
         """
         if self._timeout_hit:
-            return
+            return None
 
         if timeout is None:
             timeout = self.cmdtimeout
@@ -3163,10 +3182,9 @@ class Plugin():
             _pfname = self._make_command_filename(fname, subdir=subdir)
             self.archive.check_path(_pfname, P_FILE)
             _name = self.archive.dest_path(_pfname)
-            _file = open(_name, 'w')
-            self._log_debug(f"manual collection file opened: {_name}")
-            yield _file
-            _file.close()
+            with open(_name, 'w') as _file:
+                self._log_debug(f"manual collection file opened: {_name}")
+                yield _file
             end = time()
             run = end - start
             self._log_info(f"manual collection '{fname}' finished in {run}")
@@ -3186,8 +3204,8 @@ class Plugin():
         self._collect_copy_specs()
         self._collect_container_copy_specs()
         self._collect_tailed_files()
-        self._collect_cmds()
         self._collect_strings()
+        self._collect_cmds()
         self._collect_manual()
         fields = (self.name(), time() - start)
         self._log_debug("collected plugin '%s' in %s" % fields)
@@ -3435,10 +3453,10 @@ class Plugin():
         try:
             cmd_line_paths = glob.glob(cmd_line_glob)
             for path in cmd_line_paths:
-                f = open(self.path_join(path), 'r')
-                cmd_line = f.read().strip()
-                if process in cmd_line:
-                    status = True
+                with open(self.path_join(path), 'r') as pfile:
+                    cmd_line = pfile.read().strip()
+                    if process in cmd_line:
+                        status = True
         except IOError:
             return False
         return status
@@ -3558,20 +3576,6 @@ class SCLPlugin(RedHatPlugin):
     to match these against all found SCLs on the system. SCLs that do match
     class.files or class.packages are then accessible via self.scls_matched
     when the plugin is invoked.
-
-    Additionally, this plugin class provides "add_cmd_output_scl" (run
-    a command in context of given SCL), and "add_copy_spec_scl" and
-    "add_copy_spec_limit_scl" (copy package from file system of given SCL).
-
-    For example, you can implement a plugin that will list all global npm
-    packages in every SCL that contains "npm" package:
-
-    class SCLNpmPlugin(Plugin, SCLPlugin):
-        packages = ("%(scl_name)s-npm",)
-
-        def setup(self):
-            for scl in self.scls_matched:
-                self.add_cmd_output_scl(scl, "npm ls -g --json")
     """
 
     @property
@@ -3589,19 +3593,6 @@ class SCLPlugin(RedHatPlugin):
         """
         scl_cmd = "scl enable %s \"%s\"" % (scl, cmd)
         return scl_cmd
-
-    def add_cmd_output_scl(self, scl, cmds, **kwargs):
-        """Same as add_cmd_output, except that it wraps command in
-        "scl enable" call and sets proper PATH.
-        """
-        if scl not in self.scls_matched:
-            return
-        if isinstance(cmds, str):
-            cmds = [cmds]
-        scl_cmds = []
-        for cmd in cmds:
-            scl_cmds.append(self.convert_cmd_scl(scl, cmd))
-        self.add_cmd_output(scl_cmds, **kwargs)
 
     # config files for Software Collections are under /etc/${prefix}/${scl} and
     # var files are under /var/${prefix}/${scl} where the ${prefix} is distro

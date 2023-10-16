@@ -43,13 +43,15 @@ class OpenStackPlacement(Plugin):
             self.add_copy_spec([
                 "/var/log/placement/",
                 "/var/log/containers/placement/",
-                "/var/log/containers/httpd/placement-api/"
+                "/var/log/containers/httpd/placement-api/",
+                "/var/log/{}*/placement*".format(self.apachepkg),
             ])
         else:
             self.add_copy_spec([
                 "/var/log/placement/*.log",
                 "/var/log/containers/placement/*.log",
                 "/var/log/containers/httpd/placement-api/*log",
+                "/var/log/{}*/placement*.log".format(self.apachepkg),
             ])
 
         self.add_copy_spec([
@@ -73,11 +75,11 @@ class OpenStackPlacement(Plugin):
         connection_keys = ["database_connection", "slave_connection"]
 
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
+            r"(^\s*(%s)\s*=\s*)(.*)" % "|".join(protect_keys),
             r"\1*********"
         )
         self.apply_regex_sub(
-            r"((?m)^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
+            r"(^\s*(%s)\s*=\s*(.*)://(\w*):)(.*)(@(.*))" %
             "|".join(connection_keys),
             r"\1*********\6"
         )
@@ -85,26 +87,17 @@ class OpenStackPlacement(Plugin):
 
 class DebianPlacement(OpenStackPlacement, DebianPlugin, UbuntuPlugin):
 
-    packages = ('placement',)
-    service_name = 'placement-api'
-
-    def setup(self):
-        super(DebianPlacement, self).setup()
-        if self.get_option("all_logs"):
-            self.add_copy_spec("/var/log/apache2/placement*")
-        else:
-            self.add_copy_spec("/var/log/apache2/placement*.log")
+    apachepkg = "apache2"
+    packages = (
+        'placement-common',
+        'placement-api',
+        'python3-placement',
+    )
 
 
 class RedHatPlacement(OpenStackPlacement, RedHatPlugin):
 
+    apachepkg = "httpd"
     packages = ('openstack-selinux',)
-
-    def setup(self):
-        super(RedHatPlacement, self).setup()
-        if self.get_option("all_logs"):
-            self.add_copy_spec("/var/log/httpd/placement*")
-        else:
-            self.add_copy_spec("/var/log/httpd/placement*.log")
 
 # vim: set et ts=4 sw=4 :
